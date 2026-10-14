@@ -1,0 +1,71 @@
+# One song per line: "Title - Artist" (anything YouTube search understands works).
+# Lines starting with "#" are comments. Lines like "1. Section Name" start a
+# new section; each section is saved in its own numbered subfolder.
+
+1. Gabby / Arrival / Theme Music
+Say Hello - MAX
+Gabby's Dollhouse World - Gabby's Dollhouse
+Pinching In - Gabby's Dollhouse
+Kaleidoscope - Gabby's Dollhouse & Tehillah Alphonso
+Skibidi Meow - Gabby's Dollhouse & Ryan Crego
+Cat Party - BOBBLYS
+Sweet Cream - Gabby's Dollhouse
+Let's Go for a Ride - Gabby's Dollhouse
+Every Day Is a Party - LU KALA
+Dollhouse World - aespa
+Pretty Glitter Kitty Litter - Gabby's Dollhouse / Alex Geringas / Ryan Crego
+
+2. Main Dance Floor - Kids + Parents
+Golden - HUNTR/X
+How It's Done - HUNTR/X
+Soda Pop - Saja Boys
+Takedown - HUNTR/X
+What It Sounds Like - HUNTR/X
+Dynamite - BTS
+Butter - BTS
+Permission to Dance - BTS
+Firework - Katy Perry
+Happy - Pharrell Williams
+Girls Just Want to Have Fun - Cyndi Lauper
+Can't Stop the Feeling! - Justin Timberlake
+Shake It Off - Taylor Swift
+Roar - Katy Perry
+Better When I'm Dancin' - Meghan Trainor
+Good Time - Owl City & Carly Rae Jepsen
+Party in the U.S.A. - Miley Cyrus
+Call Me Maybe - Carly Rae Jepsen
+What Makes You Beautiful - One Direction
+Walking on Sunshine - Katrina & The Waves
+Celebration - Kool & The Gang
+Dancing Queen - ABBA
+September - Earth, Wind & Fire
+Try Everything - Shakira
+
+3. Disney / Movie Sing-Alongs
+Let It Go - Idina Menzel - Frozen
+Into the Unknown - Idina Menzel & AURORA - Frozen II
+Show Yourself - Idina Menzel & Evan Rachel Wood - Frozen II
+For the First Time in Forever - Kristen Bell & Idina Menzel - Frozen
+We Don't Talk About Bruno - Encanto Cast
+Surface Pressure - Jessica Darrow - Encanto
+The Family Madrigal - Stephanie Beatriz / Encanto Cast
+You're Welcome - Dwayne Johnson - Moana
+How Far I'll Go - Auli'i Cravalho - Moana
+This Wish - Ariana DeBose - Wish
+When Will My Life Begin? - Mandy Moore - Tangled
+I've Got a Dream - Tangled Cast
+Nobody Like U - 4*TOWN - Turning Red
+Friend Like Me - Will Smith - Aladdin
+Under the Sea - Samuel E. Wright - The Little Mermaid
+
+4. Games / Group Dance Cues
+Freeze Dance - The Kiboomers
+Cha Cha Slide - DJ Casper
+The Chicken Dance - The Emeralds
+Conga - Gloria Estefan & Miami Sound Machine
+Y.M.C.A. - Village People
+I Like to Move It - will.i.am
+Jump in the Line - Harry Belafonte
+Twist and Shout - The Beatles
+Push It (clean) - Salt-N-Pepa
+# Ice-skate / twirl game cue: reuse "Let It Go" or "Into the Unknown" from section 3.
