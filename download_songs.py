@@ -2,10 +2,16 @@
 """Search YouTube for each song in a list and save it as an MP3.
 
 Usage:
-    python download_songs.py                     # reads songs.txt, saves to ./music
-    python download_songs.py my_list.txt -o out  # custom list / output folder
-    python download_songs.py --dry-run           # only print the YouTube links found
+    python download_songs.py --dry-run               # 1. search, write playlist.csv to review
+    python download_songs.py --from-csv playlist.csv # 2. download exactly the links in the CSV
+    python download_songs.py                         # search and download in one go
+    python download_songs.py my_list.txt -o out      # custom list / output folder
     python download_songs.py --normalize-only music  # just even out volume of existing MP3s
+
+Reviewing links: --dry-run saves every match to playlist.csv (section, song, url,
+the video's title/channel/length, and a few other options). Open it in Excel or
+Google Sheets, paste a better link into the "url" column for any wrong match,
+delete rows you don't want, then run --from-csv. Rows with an empty url are skipped.
 
 Song list format (see songs.txt):
     1. Section Name          <- starts a section (saved as "01 - Section Name/")
@@ -119,13 +125,188 @@ def normalize_folder(folder, bitrate, target):
             path.with_suffix(".tagged.mp3").unlink(missing_ok=True)
 
 
-def find_video(ydl, query):
-    """Return (title, url) of the top YouTube search result, or None."""
-    info = ydl.extract_info(f"ytsearch1:{query} audio", download=False)
-    entries = info.get("entries") or []
-    if not entries:
-        return None
-    return entries[0].get("title"), entries[0].get("webpage_url") or entries[0].get("url")
+# Words in a video title that suggest it isn't the plain studio song, and how much
+# each one counts against it. Ignored when the word is part of the song line itself.
+PENALTIES = {
+    "scene": 10, "clip": 10, "trailer": 10, "teaser": 10, "episode": 10, "full movie": 10,
+    "behind the scenes": 10, "reaction": 10, "tutorial": 10, "review": 8, "compilation": 8,
+    "cover": 8, "karaoke": 8, "instrumental": 8, "parody": 8, "fan made": 8, "fanmade": 8,
+    "sped up": 8, "slowed": 8, "nightcore": 8, "8d": 8, "1 hour": 8, "10 hours": 8, "loop": 6,
+    "live": 5, "remix": 5, "mashup": 5, "acapella": 5, "a cappella": 5, "piano": 4,
+    "lyrics translation": 4, "dance video": 2, "music video": 1, "official video": 1,
+}
+# Words that suggest just the song (art tracks, official audio, lyric videos).
+BONUSES = {"official audio": 5, "audio": 3, "lyric": 3, "lyrics": 3, "official": 1}
+
+
+def normalize_text(text):
+    return " " + re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip() + " "
+
+
+def score_result(query, entry, position):
+    """Higher is better: how likely `entry` is the plain studio version of `query`."""
+    title = normalize_text(entry.get("title"))
+    channel = normalize_text(entry.get("channel") or entry.get("uploader"))
+    wanted = normalize_text(query)
+    score = -0.5 * position  # small preference for YouTube's own ranking
+
+    for word, weight in PENALTIES.items():
+        if f" {word} " in title and f" {word} " not in wanted:
+            score -= weight
+    for word, weight in BONUSES.items():
+        if f" {word} " in title:
+            score += weight
+    # "Artist - Topic" channels are YouTube Music's auto-uploaded studio tracks.
+    if channel.endswith(" topic "):
+        score += 6
+    elif "vevo" in channel:
+        score += 2
+
+    # The song title should appear in the video title.
+    song_words = normalize_text(query.split(" - ")[0]).split()
+    if song_words:
+        score += 6 * sum(f" {w} " in title for w in song_words) / len(song_words)
+    else:
+        score -= 6
+
+    duration = entry.get("duration")
+    if duration:
+        if duration < 60:
+            score -= 8
+        elif duration > 900:
+            score -= 15
+        elif duration > 480:
+            score -= 6
+    return score
+
+
+def format_duration(seconds):
+    return f"{int(seconds) // 60}:{int(seconds) % 60:02d}" if seconds else ""
+
+
+def entry_url(entry):
+    url = entry.get("webpage_url") or entry.get("url") or ""
+    if url.startswith("http"):
+        return url
+    video_id = entry.get("id") or url
+    return f"https://www.youtube.com/watch?v={video_id}" if video_id else ""
+
+
+def find_videos(ydl, query, candidates):
+    """Search YouTube and return results best-first as (score, entry) pairs."""
+    info = ydl.extract_info(f"ytsearch{candidates}:{query} official audio", download=False)
+    entries = [e for e in (info.get("entries") or []) if e]
+    ranked = [(score_result(query, e, i), e) for i, e in enumerate(entries)]
+    return sorted(ranked, key=lambda pair: pair[0], reverse=True)
+
+
+CSV_FIELDS = ["section", "song", "url", "youtube_title", "channel", "length", "other_options", "status"]
+
+
+def search_songs(songs, candidates):
+    """Find the best YouTube match for each (section, song). Returns playlist rows."""
+    rows = []
+    search_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
+    with yt_dlp.YoutubeDL(search_opts) as searcher:
+        for index, (section, query) in enumerate(songs, start=1):
+            print(f"[{index}/{len(songs)}] {query}")
+            row = {"section": section, "song": query, "url": "", "youtube_title": "", "channel": "",
+                   "length": "", "other_options": "", "status": ""}
+            rows.append(row)
+            try:
+                ranked = find_videos(searcher, query, candidates)
+            except yt_dlp.utils.DownloadError as err:
+                print(f"    search failed: {err}")
+                row["status"] = "search failed"
+                continue
+            if not ranked:
+                print("    no results")
+                row["status"] = "not found"
+                continue
+
+            best = ranked[0][1]
+            row.update(url=entry_url(best), youtube_title=best.get("title") or "",
+                       channel=best.get("channel") or best.get("uploader") or "",
+                       length=format_duration(best.get("duration")), status="found")
+            # A few runners-up, so a wrong match is easy to swap out.
+            row["other_options"] = " | ".join(
+                f"{e.get('title')} [{format_duration(e.get('duration'))}] {entry_url(e)}"
+                for _, e in ranked[1:4]
+            )
+            print(f"    -> {row['youtube_title']} ({row['channel']}, {row['length']})\n       {row['url']}")
+    return rows
+
+
+def write_playlist_csv(path, rows):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    # utf-8-sig so Excel shows accented characters correctly.
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def read_playlist_csv(path):
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        missing = {"song", "url"} - set(reader.fieldnames or [])
+        if missing:
+            sys.exit(f"{path} needs these columns: {', '.join(sorted(missing))}")
+        rows = []
+        for raw in reader:
+            row = {k: (raw.get(k) or "").strip() for k in CSV_FIELDS}
+            if row["song"]:
+                row["section"] = safe_name(row["section"]) if row["section"] else ""
+                rows.append(row)
+        return rows
+
+
+def download_rows(rows, output, bitrate, target):
+    """Download each row's url to an MP3, numbered in row order. Updates row["status"]."""
+    for index, row in enumerate(rows, start=1):
+        query, url = row["song"], row["url"]
+        print(f"[{index}/{len(rows)}] {query}")
+        if not url:
+            print("    no link, skipping")
+            row["status"] = row["status"] if row["status"] in ("search failed", "not found") else "no link"
+            continue
+
+        folder = Path(output) / row["section"]
+        folder.mkdir(parents=True, exist_ok=True)
+        mp3_path = folder / f"{index:02d} - {safe_name(query)}.mp3"
+        if mp3_path.exists():
+            print("    already downloaded, skipping")
+            row["status"] = "skipped (exists)"
+            continue
+
+        # Download the original audio, then normalize and convert it to MP3 in a
+        # single ffmpeg encode so quality is only lost once.
+        download_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": str(mp3_path.with_suffix("")) + ".source.%(ext)s",
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+        }
+        source = None
+        try:
+            with yt_dlp.YoutubeDL(download_opts) as downloader:
+                info = downloader.extract_info(url, download=True)
+                source = Path(info["requested_downloads"][0]["filepath"])
+                row["youtube_title"] = row["youtube_title"] or info.get("title") or ""
+            encode_mp3(source, mp3_path, bitrate, target, song_tags(query))
+            print(f"    saved {mp3_path}")
+            row["status"] = "downloaded"
+        except yt_dlp.utils.DownloadError as err:
+            print(f"    download failed: {err}")
+            row["status"] = "download failed"
+        except subprocess.CalledProcessError as err:
+            print(f"    converting to MP3 failed: {(err.stderr or '').strip()[-300:]}")
+            mp3_path.unlink(missing_ok=True)
+            row["status"] = "convert failed"
+        finally:
+            if source:
+                source.unlink(missing_ok=True)
 
 
 def main():
@@ -133,7 +314,13 @@ def main():
     parser.add_argument("song_list", nargs="?", default="songs.txt", help="text file with one song per line")
     parser.add_argument("-o", "--output", default="music", help="folder to save MP3s into (default: music)")
     parser.add_argument("--bitrate", default="192", help="MP3 bitrate in kbps (default: 192)")
-    parser.add_argument("--dry-run", action="store_true", help="only search and print links, don't download")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="only search; save the matches to a CSV you can review and edit")
+    parser.add_argument("--csv", default="playlist.csv", help="CSV that --dry-run writes (default: playlist.csv)")
+    parser.add_argument("--overwrite", action="store_true", help="let --dry-run replace an existing CSV")
+    parser.add_argument("--from-csv", metavar="CSV", help="download the links in this CSV instead of searching")
+    parser.add_argument("--candidates", type=int, default=8,
+                        help="search results to compare for each song (default: 8)")
     parser.add_argument("--loudness", type=float, default=-14.0,
                         help="target loudness in LUFS; closer to 0 is louder (default: -14)")
     parser.add_argument("--no-normalize", action="store_true", help="keep each song's original volume")
@@ -146,83 +333,35 @@ def main():
         normalize_folder(args.normalize_only, args.bitrate, args.loudness)
         return
 
-    songs = parse_song_list(args.song_list)
-    if not songs:
-        sys.exit(f"No songs found in {args.song_list}")
+    if args.from_csv:
+        rows = read_playlist_csv(args.from_csv)
+        if not rows:
+            sys.exit(f"No songs found in {args.from_csv}")
+    else:
+        songs = parse_song_list(args.song_list)
+        if not songs:
+            sys.exit(f"No songs found in {args.song_list}")
+        if args.dry_run and Path(args.csv).exists() and not args.overwrite:
+            sys.exit(f"{args.csv} already exists (it may have your edits). "
+                     f"Use --overwrite to replace it, or --csv to pick another file name.")
+        rows = search_songs(songs, args.candidates)
+        if args.dry_run:
+            write_playlist_csv(args.csv, rows)
+            missing = sum(1 for r in rows if not r["url"])
+            print(f"\nSaved {len(rows)} songs to {args.csv} ({missing} without a link).")
+            print(f"Check the links, edit the url column, then run:\n"
+                  f"    python download_songs.py --from-csv {args.csv}")
+            return
 
-    search_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
-    results = []  # (query, youtube_title, url, status)
+    download_rows(rows, args.output, args.bitrate, target)
 
-    with yt_dlp.YoutubeDL(search_opts) as searcher:
-        for index, (section, query) in enumerate(songs, start=1):
-            print(f"[{index}/{len(songs)}] {query}")
-            try:
-                found = find_video(searcher, query)
-            except yt_dlp.utils.DownloadError as err:
-                print(f"    search failed: {err}")
-                results.append((query, "", "", "search failed"))
-                continue
-            if not found:
-                print("    no results")
-                results.append((query, "", "", "not found"))
-                continue
-
-            yt_title, url = found
-            print(f"    -> {yt_title}\n       {url}")
-            if args.dry_run:
-                results.append((query, yt_title, url, "found"))
-                continue
-
-            folder = Path(args.output) / section
-            folder.mkdir(parents=True, exist_ok=True)
-            mp3_path = folder / f"{index:02d} - {safe_name(query)}.mp3"
-            if mp3_path.exists():
-                print("    already downloaded, skipping")
-                results.append((query, yt_title, url, "skipped (exists)"))
-                continue
-
-            # Download the original audio, then normalize and convert it to MP3 in a
-            # single ffmpeg encode so quality is only lost once.
-            download_opts = {
-                "format": "bestaudio/best",
-                "outtmpl": str(mp3_path.with_suffix("")) + ".source.%(ext)s",
-                "noplaylist": True,
-                "quiet": True,
-                "no_warnings": True,
-            }
-            source = None
-            try:
-                with yt_dlp.YoutubeDL(download_opts) as downloader:
-                    info = downloader.extract_info(url, download=True)
-                    source = Path(info["requested_downloads"][0]["filepath"])
-                encode_mp3(source, mp3_path, args.bitrate, target, song_tags(query))
-                print(f"    saved {mp3_path}")
-                results.append((query, yt_title, url, "downloaded"))
-            except yt_dlp.utils.DownloadError as err:
-                print(f"    download failed: {err}")
-                results.append((query, yt_title, url, "download failed"))
-            except subprocess.CalledProcessError as err:
-                print(f"    converting to MP3 failed: {(err.stderr or '').strip()[-300:]}")
-                mp3_path.unlink(missing_ok=True)
-                results.append((query, yt_title, url, "convert failed"))
-            finally:
-                if source:
-                    source.unlink(missing_ok=True)
-
-    # Write a summary so you can double-check which video was picked for each song.
-    Path(args.output).mkdir(parents=True, exist_ok=True)
+    # Write a summary so you can double-check which video was used for each song.
     report = Path(args.output) / "links.csv"
-
-    with report.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["song", "youtube_title", "url", "status"])
-        writer.writerows(results)
-
-    failed = [r for r in results if "fail" in r[3] or r[3] == "not found"]
-    print(f"\nDone: {len(results) - len(failed)}/{len(results)} OK. Links saved to {report}")
-    for query, *_, status in failed:
-        print(f"  {status}: {query}")
-
+    write_playlist_csv(report, rows)
+    failed = [r for r in rows if r["status"] not in ("downloaded", "skipped (exists)")]
+    print(f"\nDone: {len(rows) - len(failed)}/{len(rows)} OK. Links saved to {report}")
+    for row in failed:
+        print(f"  {row['status']}: {row['song']}")
 
 if __name__ == "__main__":
     main()

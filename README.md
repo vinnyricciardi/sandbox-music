@@ -13,16 +13,45 @@ Searches YouTube for each song in `songs.txt` and saves it as an MP3 using
 
 ## Usage
 
+The recommended way is to review the links first, then download:
+
 ```bash
-python download_songs.py --dry-run    # preview which YouTube video each song matches
-python download_songs.py              # download everything into ./music
-python download_songs.py my_list.txt -o party_music --bitrate 320
+python download_songs.py --dry-run              # 1. search, save matches to playlist.csv
+#   2. open playlist.csv in Excel / Google Sheets / Numbers and fix any links
+python download_songs.py --from-csv playlist.csv   # 3. download exactly those links
 ```
 
+Or search and download in one go: `python download_songs.py` (or
+`python download_songs.py my_list.txt -o party_music --bitrate 320`).
+
+### Reviewing links in playlist.csv
+
+| column | what it's for |
+| --- | --- |
+| `section` | folder the song is saved in |
+| `song` | used for the file name and the MP3's title/artist tags |
+| `url` | **the YouTube link that gets downloaded — edit this one** |
+| `youtube_title`, `channel`, `length` | what the search picked, to help you spot wrong matches |
+| `other_options` | the next-best results with their links, for quick swaps |
+
+- Wrong video? Paste a better link into `url` (any YouTube link works).
+- Don't want a song? Delete the row. Want a different order? Move rows around:
+  files are numbered in the order of the CSV.
+- A row with an empty `url` is skipped.
+- `--dry-run` won't overwrite an existing `playlist.csv`, so your edits are safe.
+  Use `--overwrite` to search again from scratch.
+
+### How songs are matched
+
+For each song the script compares the top 8 YouTube results (`--candidates` to change)
+and prefers the plain studio track: YouTube Music "Artist - Topic" uploads, "official
+audio" and lyric videos. It avoids movie scenes, clips, trailers, covers, live versions,
+karaoke, remixes, sped-up/hour-long loops, and anything much too short or long to be
+the song. It's still worth skimming `playlist.csv` before downloading.
+
 Each section of the list (`1. Gabby / Arrival / Theme Music`, ...) gets its own
-folder, and files are numbered in playlist order. `music/links.csv` records the
-YouTube video chosen for every song, so you can check for wrong matches. Re-running
-skips songs that are already downloaded.
+folder. After downloading, `music/links.csv` records the link used for every song and
+whether it worked. Re-running skips songs that are already downloaded.
 
 ## Even volume
 
