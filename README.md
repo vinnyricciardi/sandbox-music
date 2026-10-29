@@ -125,6 +125,31 @@ The first run opens your browser to sign in. Google will warn that the app isn't
 verified. That's expected for your own test app, so choose **Continue**. Your login is
 remembered in `youtube_token.json` (also git-ignored).
 
+### "Access blocked" when signing in
+
+The message under "Access blocked" says which fix you need:
+
+- **"has not completed the Google verification process" / Error 403: access_denied.**
+  The Google account you signed in with isn't a test user. In Google Cloud, open
+  **Google Auth Platform → Audience** (older consoles: **OAuth consent screen**). Make
+  sure **Publishing status** is **Testing**, then under **Test users** click **Add users**
+  and add the exact Gmail address you sign in with. Wait a minute, then run the script
+  again.
+  - If you have several Google accounts, the browser may pick the wrong one. Choose
+    the test-user account in the account picker.
+  - If your YouTube channel is a Brand Account, add the personal Gmail you log in
+    with, then pick the channel after signing in.
+- **"Your admin" / "your organization" / admin_policy_enforced.** You signed in with a
+  work or school Google account whose admin blocks unverified apps. Use a personal
+  Gmail account instead.
+- **Error 400: redirect_uri_mismatch.** The OAuth client was created as a "Web
+  application". Create a new one of type **Desktop app** and download its JSON. The
+  script now checks for this and tells you.
+- **"YouTube Data API v3 has not been used in project … or it is disabled."** Enable it
+  under **APIs & Services → Library**.
+
+If you changed accounts or settings, delete `youtube_token.json` before trying again.
+
 YouTube's free API quota allows about 200 songs a day. If it runs out, the script
 prints a command with `--playlist-id` to finish the next day. Songs already in the
 playlist are skipped, so rerunning it is safe.

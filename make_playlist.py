@@ -19,6 +19,7 @@ Only rows with a url are used.
 """
 
 import argparse
+import json
 import sys
 import webbrowser
 from pathlib import Path
@@ -54,6 +55,29 @@ def quick_links(songs, open_browser, per_link=WATCH_VIDEOS_LIMIT):
           "use --create instead (see README).")
 
 
+SIGN_IN_TIPS = """Opening your browser to sign in to Google...
+  - Sign in with the Google account you added under "Test users" in Google Cloud.
+  - "Google hasn't verified this app" is expected: click Continue.
+  - "Access blocked ... Error 403: access_denied" means that account isn't a test user
+    yet. See "Access blocked" in README.md.
+"""
+
+
+def check_client_secrets(secrets_file):
+    """Catch the wrong kind of OAuth client, which Google rejects as "Access blocked"."""
+    try:
+        data = json.loads(Path(secrets_file).read_text())
+    except (OSError, ValueError):
+        sys.exit(f"{secrets_file} isn't a valid OAuth client file. Download it again from "
+                 f"Google Cloud (Credentials > your OAuth client > Download JSON).")
+    if "installed" not in data:
+        kind = next(iter(data), "unknown")
+        sys.exit(f"{secrets_file} is a '{kind}' OAuth client, but this script needs a 'Desktop app' "
+                 f"client.\nGoogle blocks sign-in with the wrong type (Error 400: redirect_uri_mismatch).\n"
+                 f"In Google Cloud go to Credentials > Create credentials > OAuth client ID > "
+                 f"Application type: Desktop app,\nthen download its JSON and save it as {secrets_file}.")
+
+
 def youtube_client(secrets_file, token_file):
     try:
         from google.auth.transport.requests import Request
@@ -75,7 +99,9 @@ def youtube_client(secrets_file, token_file):
         if not Path(secrets_file).exists():
             sys.exit(f"{secrets_file} not found. See 'Making a YouTube playlist' in README.md "
                      f"for how to download it from Google Cloud.")
+        check_client_secrets(secrets_file)
         # Opens your browser so you can sign in and allow access to your YouTube account.
+        print(SIGN_IN_TIPS)
         creds = InstalledAppFlow.from_client_secrets_file(secrets_file, SCOPES).run_local_server(port=0)
         Path(token_file).write_text(creds.to_json())
     return build("youtube", "v3", credentials=creds)
