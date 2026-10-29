@@ -5,11 +5,26 @@ Searches YouTube for each song in `songs.txt` and saves it as an MP3 using
 
 ## Setup
 
-1. Install ffmpeg (used to convert audio to MP3):
-   - macOS: `brew install ffmpeg`
-   - Windows: `winget install ffmpeg`
-   - Linux: `sudo apt install ffmpeg`
-2. Install the Python dependency: `pip install -r requirements.txt`
+1. Install ffmpeg (converts audio to MP3) and Deno (YouTube downloads need a
+   JavaScript runtime; Node.js also works if you already have it):
+   - macOS: `brew install ffmpeg deno`
+   - Windows: `winget install ffmpeg` and `winget install DenoLand.Deno`
+   - Linux: `sudo apt install ffmpeg`, then `curl -fsSL https://deno.land/install.sh | sh`
+2. Install the Python dependency: `pip install -U -r requirements.txt`
+
+## Troubleshooting "Video unavailable"
+
+If many downloads fail with "video unavailable" (or "not available"):
+
+1. Update yt-dlp, since YouTube changes often: `pip install -U "yt-dlp[default]"`
+2. Make sure Deno or Node.js is installed (see Setup). The script warns at startup
+   if it can't find either one.
+3. If the error mentions "Sign in to confirm you're not a bot", or a video is
+   age-restricted, borrow your browser's YouTube login:
+   `python download_songs.py --from-csv playlist.csv --cookies-from-browser chrome`
+   (or `firefox`, `safari`, `edge`).
+
+Rerunning is safe: songs that already downloaded are skipped.
 
 ## Usage
 

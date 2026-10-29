@@ -23,13 +23,15 @@ Every MP3 is volume-normalized to the same loudness (default -14 LUFS, the level
 Spotify and YouTube use) with ffmpeg's two-pass EBU R128 "loudnorm" filter, so
 songs play back at a consistent volume. Use --no-normalize to turn this off.
 
-Requires: pip install yt-dlp   and   ffmpeg on your PATH.
+Requires: pip install -r requirements.txt, ffmpeg, and a JavaScript runtime (Deno or
+Node.js) on your PATH; YouTube downloads need one to work.
 """
 
 import argparse
 import csv
 import json
 import re
+import shutil
 import subprocess
 import sys
 import unicodedata
@@ -234,10 +236,44 @@ CSV_FIELDS = ["section", "song", "url", "youtube_title", "channel", "length",
               "option_2", "option_3", "option_4", "status"]
 
 
-def search_songs(songs, candidates):
+def ytdl_options(cookies_from_browser=None):
+    """yt-dlp settings shared by searching and downloading."""
+    opts = {"quiet": True, "no_warnings": False}
+    # YouTube now requires solving a JavaScript challenge. yt-dlp only looks for Deno
+    # by default, so enable whichever supported runtime is installed.
+    runtimes = {name: {} for name in ("deno", "node", "bun") if shutil.which(name)}
+    if runtimes:
+        opts["js_runtimes"] = runtimes
+        # Fetch the newest challenge solver from yt-dlp's GitHub if the bundled one is stale.
+        opts["remote_components"] = ["ejs:github"]
+    if cookies_from_browser:
+        # Use your browser's YouTube login (fixes "confirm you're not a bot" errors).
+        opts["cookiesfrombrowser"] = (cookies_from_browser,)
+    return opts
+
+
+def clean_url(url):
+    """Reduce a YouTube link to just the video, dropping playlist/mix parameters."""
+    match = re.search(r"(?:v=|youtu\.be/|shorts/|embed/)([A-Za-z0-9_-]{11})", url)
+    return f"https://www.youtube.com/watch?v={match.group(1)}" if match else url.strip()
+
+
+TROUBLESHOOTING = """
+Most downloads failed. Usually one of these fixes it:
+  1. Update yt-dlp:            pip install -U "yt-dlp[default]"
+  2. Install a JavaScript runtime (needed for YouTube), then rerun:
+       Mac: brew install deno    Windows: winget install DenoLand.Deno
+       (Node.js also works if you already have it.)
+  3. If it says "Sign in to confirm you're not a bot" or the video is age-restricted,
+     use your browser's YouTube login:   --cookies-from-browser chrome
+     (or firefox, safari, edge). Close the browser first if cookies can't be read.
+Run again afterwards; songs that already downloaded are skipped."""
+
+
+def search_songs(songs, candidates, base_opts=None):
     """Find the best YouTube match for each (section, song, hint). Returns playlist rows."""
     rows = []
-    search_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
+    search_opts = {**(base_opts or {}), "extract_flat": True}
     with yt_dlp.YoutubeDL(search_opts) as searcher:
         for index, (section, query, hint) in enumerate(songs, start=1):
             print(f"[{index}/{len(songs)}] {query}" + (f"  ({hint})" if hint else ""))
@@ -293,10 +329,10 @@ def read_playlist_csv(path):
         return rows
 
 
-def download_rows(rows, output, bitrate, target):
+def download_rows(rows, output, bitrate, target, base_opts=None):
     """Download each row's url to an MP3, numbered in row order. Updates row["status"]."""
     for index, row in enumerate(rows, start=1):
-        query, url = row["song"], row["url"]
+        query, url = row["song"], clean_url(row["url"]) if row["url"] else ""
         print(f"[{index}/{len(rows)}] {query}")
         if not url:
             print("    no link, skipping")
@@ -314,11 +350,10 @@ def download_rows(rows, output, bitrate, target):
         # Download the original audio, then normalize and convert it to MP3 in a
         # single ffmpeg encode so quality is only lost once.
         download_opts = {
+            **(base_opts or {}),
             "format": "bestaudio/best",
             "outtmpl": str(mp3_path.with_suffix("")) + ".source.%(ext)s",
             "noplaylist": True,
-            "quiet": True,
-            "no_warnings": True,
         }
         source = None
         try:
@@ -351,6 +386,9 @@ def main():
     parser.add_argument("--csv", default="playlist.csv", help="CSV that --dry-run writes (default: playlist.csv)")
     parser.add_argument("--overwrite", action="store_true", help="let --dry-run replace an existing CSV")
     parser.add_argument("--from-csv", metavar="CSV", help="download the links in this CSV instead of searching")
+    parser.add_argument("--cookies-from-browser", metavar="BROWSER",
+                        help="use your YouTube login from this browser (chrome, firefox, safari, edge) "
+                             "if YouTube asks to confirm you're not a bot")
     parser.add_argument("--candidates", type=int, default=8,
                         help="search results to compare for each song (default: 8)")
     parser.add_argument("--loudness", type=float, default=-14.0,
@@ -360,6 +398,11 @@ def main():
                         help="don't download; just normalize the MP3s already in FOLDER")
     args = parser.parse_args()
     target = None if args.no_normalize else args.loudness
+    base_opts = ytdl_options(args.cookies_from_browser)
+    if "js_runtimes" not in base_opts and not args.normalize_only:
+        print("Warning: no JavaScript runtime (Deno or Node.js) found. YouTube downloads will\n"
+              "likely fail with 'video not available'. Install one first:\n"
+              "  Mac: brew install deno    Windows: winget install DenoLand.Deno\n")
 
     if args.normalize_only:
         normalize_folder(args.normalize_only, args.bitrate, args.loudness)
@@ -376,7 +419,7 @@ def main():
         if args.dry_run and Path(args.csv).exists() and not args.overwrite:
             sys.exit(f"{args.csv} already exists (it may have your edits). "
                      f"Use --overwrite to replace it, or --csv to pick another file name.")
-        rows = search_songs(songs, args.candidates)
+        rows = search_songs(songs, args.candidates, base_opts)
         if args.dry_run:
             write_playlist_csv(args.csv, rows)
             missing = sum(1 for r in rows if not r["url"])
@@ -389,7 +432,7 @@ def main():
                   f"    python download_songs.py --from-csv {args.csv}")
             return
 
-    download_rows(rows, args.output, args.bitrate, target)
+    download_rows(rows, args.output, args.bitrate, target, base_opts)
 
     # Write a summary so you can double-check which video was used for each song.
     report = Path(args.output) / "links.csv"
@@ -398,6 +441,9 @@ def main():
     print(f"\nDone: {len(rows) - len(failed)}/{len(rows)} OK. Links saved to {report}")
     for row in failed:
         print(f"  {row['status']}: {row['song']}")
+    download_failures = sum(1 for r in rows if r["status"] == "download failed")
+    if download_failures and download_failures >= len(rows) / 4:
+        print(TROUBLESHOOTING)
 
 if __name__ == "__main__":
     main()
