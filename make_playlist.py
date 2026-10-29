@@ -6,7 +6,8 @@ Two ways:
   Quick, no setup (unofficial YouTube link, may stop working at any time):
       python make_playlist.py playlist.csv --open
   Prints (and with --open, opens) links that play your songs as a temporary
-  playlist, up to 50 songs per link.
+  playlist, up to 50 songs per link. If YouTube shows fewer songs than that,
+  use smaller links: --per-link 20
 
   A real playlist saved in your YouTube account (official YouTube Data API):
       python make_playlist.py playlist.csv --create "Birthday Party"
@@ -24,7 +25,7 @@ from pathlib import Path
 
 from download_songs import read_playlist_csv, video_id
 
-WATCH_VIDEOS_LIMIT = 50  # YouTube's limit for watch_videos links
+WATCH_VIDEOS_LIMIT = 50  # YouTube's limit for watch_videos links (some reports say 20)
 SCOPES = ["https://www.googleapis.com/auth/youtube"]
 
 
@@ -39,16 +40,18 @@ def songs_with_ids(csv_path):
     return songs
 
 
-def quick_links(songs, open_browser):
+def quick_links(songs, open_browser, per_link=WATCH_VIDEOS_LIMIT):
     ids = [vid for _, vid in songs]
-    chunks = [ids[i:i + WATCH_VIDEOS_LIMIT] for i in range(0, len(ids), WATCH_VIDEOS_LIMIT)]
+    chunks = [ids[i:i + per_link] for i in range(0, len(ids), per_link)]
     for n, chunk in enumerate(chunks, start=1):
         url = "https://www.youtube.com/watch_videos?video_ids=" + ",".join(chunk)
         print(f"\nPart {n} of {len(chunks)} ({len(chunk)} songs):\n{url}")
         if open_browser:
             webbrowser.open(url)
-    print("\nThese are temporary playlists. To keep one, open it and use Save in the "
-          "playlist panel (if YouTube offers it), or use --create for a real playlist.")
+    print("\nThese are temporary playlists. To try keeping one, sign in, open it, and look for "
+          "Save in the playlist panel;\nif there isn't one, change www.youtube.com to "
+          "music.youtube.com and look for Save there.\nFor a real playlist in your account, "
+          "use --create instead (see README).")
 
 
 def youtube_client(secrets_file, token_file):
@@ -138,6 +141,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("csv", nargs="?", default="playlist.csv", help="CSV with song and url columns")
     parser.add_argument("--open", action="store_true", help="open the quick playlist links in your browser")
+    parser.add_argument("--per-link", type=int, default=WATCH_VIDEOS_LIMIT, metavar="N",
+                        help=f"songs per quick link (default: {WATCH_VIDEOS_LIMIT}; try 20 if lists come up short)")
     parser.add_argument("--create", metavar="TITLE", help="create a real playlist with this title (YouTube API)")
     parser.add_argument("--playlist-id", help="add to this existing playlist instead (YouTube API)")
     parser.add_argument("--privacy", choices=["private", "unlisted", "public"], default="private",
@@ -156,7 +161,7 @@ def main():
     if args.create or args.playlist_id:
         api_playlist(songs, args)
     else:
-        quick_links(songs, args.open)
+        quick_links(songs, args.open, max(1, min(args.per_link, WATCH_VIDEOS_LIMIT)))
 
 
 if __name__ == "__main__":

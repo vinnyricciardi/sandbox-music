@@ -95,6 +95,11 @@ python make_playlist.py playlist.csv --open
 
 This opens links that play your songs as a temporary playlist (50 songs per link).
 It uses an unofficial YouTube link format that may stop working without notice.
+If a list shows fewer songs than expected, use smaller links with `--per-link 20`.
+To try keeping a list, sign in and look for **Save** in the playlist panel. If it
+isn't there, change `www.youtube.com` to `music.youtube.com` in the address bar and
+look for **Save** there. This isn't officially supported, so use `--create` if you
+want a reliable playlist.
 
 **A real playlist saved in your account (YouTube Data API):**
 
