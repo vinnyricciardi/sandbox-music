@@ -83,6 +83,47 @@ Each section of the list (`1. Gabby / Arrival / Theme Music`, ...) gets its own
 folder. After downloading, `music/links.csv` records the link used for every song and
 whether it worked. Re-running skips songs that are already downloaded.
 
+## Making a YouTube playlist
+
+`make_playlist.py` turns `playlist.csv` into a YouTube playlist, in the same order.
+
+**Quick, no setup:**
+
+```bash
+python make_playlist.py playlist.csv --open
+```
+
+This opens links that play your songs as a temporary playlist (50 songs per link).
+It uses an unofficial YouTube link format that may stop working without notice.
+
+**A real playlist saved in your account (YouTube Data API):**
+
+One-time setup (about 10 minutes):
+
+1. `pip install -r requirements-playlist.txt`
+2. Go to <https://console.cloud.google.com/>, create a project, then under
+   **APIs & Services → Library** enable **YouTube Data API v3**.
+3. Under **APIs & Services → OAuth consent screen**, choose **External**, fill in the
+   app name and your email, and add your own Google account under **Test users**.
+4. Under **APIs & Services → Credentials**, choose **Create credentials → OAuth client
+   ID → Desktop app**, then download the JSON and save it next to the script as
+   `client_secret.json`. It is git-ignored; don't share it.
+
+Then:
+
+```bash
+python make_playlist.py playlist.csv --create "Birthday Party"            # private by default
+python make_playlist.py playlist.csv --create "Birthday Party" --privacy unlisted
+```
+
+The first run opens your browser to sign in. Google will warn that the app isn't
+verified. That's expected for your own test app, so choose **Continue**. Your login is
+remembered in `youtube_token.json` (also git-ignored).
+
+YouTube's free API quota allows about 200 songs a day. If it runs out, the script
+prints a command with `--playlist-id` to finish the next day. Songs already in the
+playlist are skipped, so rerunning it is safe.
+
 ## Even volume
 
 Every song is volume-normalized to the same loudness (-14 LUFS by default, the

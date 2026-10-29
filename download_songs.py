@@ -252,10 +252,16 @@ def ytdl_options(cookies_from_browser=None):
     return opts
 
 
+def video_id(url):
+    """Return the 11-character YouTube video ID in a link, or None."""
+    match = re.search(r"(?:v=|youtu\.be/|shorts/|embed/)([A-Za-z0-9_-]{11})", url or "")
+    return match.group(1) if match else None
+
+
 def clean_url(url):
     """Reduce a YouTube link to just the video, dropping playlist/mix parameters."""
-    match = re.search(r"(?:v=|youtu\.be/|shorts/|embed/)([A-Za-z0-9_-]{11})", url)
-    return f"https://www.youtube.com/watch?v={match.group(1)}" if match else url.strip()
+    vid = video_id(url)
+    return f"https://www.youtube.com/watch?v={vid}" if vid else url.strip()
 
 
 TROUBLESHOOTING = """
