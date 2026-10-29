@@ -32,7 +32,7 @@ Or search and download in one go: `python download_songs.py` (or
 | `song` | used for the file name and the MP3's title/artist tags |
 | `url` | **the YouTube link that gets downloaded — edit this one** |
 | `youtube_title`, `channel`, `length` | what the search picked, to help you spot wrong matches |
-| `other_options` | the next-best results with their links, for quick swaps |
+| `option_2` … `option_4` | the next-best results with their links, for quick swaps |
 
 - Wrong video? Paste a better link into `url` (any YouTube link works).
 - Don't want a song? Delete the row. Want a different order? Move rows around:
@@ -41,13 +41,28 @@ Or search and download in one go: `python download_songs.py` (or
 - `--dry-run` won't overwrite an existing `playlist.csv`, so your edits are safe.
   Use `--overwrite` to search again from scratch.
 
+### Helping the search with hints
+
+In `songs.txt`, anything after a `|` is added to the YouTube search but not used for
+the file name or tags. Use it for the movie or show a song is from, or a version you
+want:
+
+```
+Pinching In - Gabby's Dollhouse | Gabby's Dollhouse The Movie
+Let It Go - Idina Menzel | Frozen
+Push It - Salt-N-Pepa | radio edit
+```
+
 ### How songs are matched
 
 For each song the script compares the top 8 YouTube results (`--candidates` to change)
 and prefers the plain studio track: YouTube Music "Artist - Topic" uploads, "official
 audio" and lyric videos. It avoids movie scenes, clips, trailers, covers, live versions,
 karaoke, remixes, sped-up/hour-long loops, and anything much too short or long to be
-the song. It's still worth skimming `playlist.csv` before downloading.
+the song, alternate versions (reprises, translated or tour versions), and other
+singers' versions. The song title has to appear in the video title. Picks that
+score poorly are marked `check: weak match` in the `status` column, so start
+your review there.
 
 Each section of the list (`1. Gabby / Arrival / Theme Music`, ...) gets its own
 folder. After downloading, `music/links.csv` records the link used for every song and

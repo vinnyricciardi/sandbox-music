@@ -16,6 +16,7 @@ delete rows you don't want, then run --from-csv. Rows with an empty url are skip
 Song list format (see songs.txt):
     1. Section Name          <- starts a section (saved as "01 - Section Name/")
     Title - Artist           <- one song per line
+    Title - Artist | Movie   <- text after "|" only helps the search (not in the file name)
     # comment                <- ignored
 
 Every MP3 is volume-normalized to the same loudness (default -14 LUFS, the level
@@ -31,6 +32,7 @@ import json
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 try:
@@ -48,7 +50,7 @@ def safe_name(text):
 
 
 def parse_song_list(path):
-    """Return a list of (section_folder, song_query) tuples."""
+    """Return a list of (section_folder, song, search_hint) tuples."""
     songs = []
     section = ""
     for raw in Path(path).read_text(encoding="utf-8").splitlines():
@@ -59,7 +61,8 @@ def parse_song_list(path):
         if match:
             section = f"{int(match.group(1)):02d} - {safe_name(match.group(2))}"
             continue
-        songs.append((section, line))
+        song, _, hint = line.partition("|")
+        songs.append((section, song.strip(), hint.strip()))
     return songs
 
 
@@ -134,25 +137,39 @@ PENALTIES = {
     "sped up": 8, "slowed": 8, "nightcore": 8, "8d": 8, "1 hour": 8, "10 hours": 8, "loop": 6,
     "live": 5, "remix": 5, "mashup": 5, "acapella": 5, "a cappella": 5, "piano": 4,
     "lyrics translation": 4, "dance video": 2, "music video": 1, "official video": 1,
+    "reprise": 8, "pitched": 8, "broadway": 6, "end credits": 6, "end title": 6, "score": 4,
+    "sing along": 1,
+    # Translated versions of soundtrack songs.
+    "spanish": 6, "espanol": 6, "tagalog": 6, "french": 6, "german": 6, "italian": 6,
+    "portuguese": 6, "japanese": 6, "latino": 6,
 }
+# "(Xyz Version)" usually means an alternate take, except for these.
+OK_VERSIONS = {"single", "soundtrack", "album", "radio", "original", "film", "movie", "studio"}
+VERSION_RE = re.compile(r" (\w+) version ")
 # Words that suggest just the song (art tracks, official audio, lyric videos).
 BONUSES = {"official audio": 5, "audio": 3, "lyric": 3, "lyrics": 3, "official": 1}
 
 
 def normalize_text(text):
-    return " " + re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip() + " "
+    # Punctuation (including curly quotes) becomes a space, then accents are dropped.
+    text = re.sub(r"[\W_]+", " ", (text or "").lower())
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return " " + " ".join(text.split()) + " "
 
 
-def score_result(query, entry, position):
-    """Higher is better: how likely `entry` is the plain studio version of `query`."""
+def score_result(song, entry, position, hint=""):
+    """Higher is better: how likely `entry` is the plain studio version of `song`."""
     title = normalize_text(entry.get("title"))
     channel = normalize_text(entry.get("channel") or entry.get("uploader"))
-    wanted = normalize_text(query)
+    wanted = normalize_text(f"{song} {hint}")
     score = -0.5 * position  # small preference for YouTube's own ranking
 
     for word, weight in PENALTIES.items():
         if f" {word} " in title and f" {word} " not in wanted:
             score -= weight
+    for match in VERSION_RE.finditer(title):
+        if match.group(1) not in OK_VERSIONS and f" {match.group(0).strip()} " not in wanted:
+            score -= 5
     for word, weight in BONUSES.items():
         if f" {word} " in title:
             score += weight
@@ -162,16 +179,25 @@ def score_result(query, entry, position):
     elif "vevo" in channel:
         score += 2
 
-    # The song title should appear in the video title.
-    song_words = normalize_text(query.split(" - ")[0]).split()
-    if song_words:
-        score += 6 * sum(f" {w} " in title for w in song_words) / len(song_words)
-    else:
-        score -= 6
+    # The song title must appear in the video title; a big official channel posting
+    # a different song from the same movie is still the wrong song.
+    song_title, _, artist = song.partition(" - ")
+    song_words = [w for w in normalize_text(song_title).split() if w not in {"the", "a", "an"}]
+    found = sum(f" {w} " in title for w in song_words) / len(song_words) if song_words else 0
+    score += 6 * found
+    if found < 0.6:
+        score -= 12
+
+    # Credited artists in the title or channel (avoids other singers' versions).
+    artist_words = [w for w in normalize_text(artist).split() if w not in {"the", "and", "cast", "feat", "ft"}]
+    if artist_words:
+        score += 4 * sum(f" {w} " in title + channel for w in artist_words) / len(artist_words)
 
     duration = entry.get("duration")
     if duration:
         if duration < 60:
+            score -= 12
+        elif duration < 90:
             score -= 8
         elif duration > 900:
             score -= 15
@@ -192,29 +218,34 @@ def entry_url(entry):
     return f"https://www.youtube.com/watch?v={video_id}" if video_id else ""
 
 
-def find_videos(ydl, query, candidates):
+def find_videos(ydl, song, candidates, hint=""):
     """Search YouTube and return results best-first as (score, entry) pairs."""
-    info = ydl.extract_info(f"ytsearch{candidates}:{query} official audio", download=False)
+    query = " ".join(part for part in (song, hint, "official audio") if part)
+    info = ydl.extract_info(f"ytsearch{candidates}:{query}", download=False)
     entries = [e for e in (info.get("entries") or []) if e]
-    ranked = [(score_result(query, e, i), e) for i, e in enumerate(entries)]
+    ranked = [(score_result(song, e, i, hint), e) for i, e in enumerate(entries)]
     return sorted(ranked, key=lambda pair: pair[0], reverse=True)
 
 
-CSV_FIELDS = ["section", "song", "url", "youtube_title", "channel", "length", "other_options", "status"]
+# Best matches scoring below this get flagged in the CSV for a manual check.
+WEAK_MATCH_SCORE = 5
+
+CSV_FIELDS = ["section", "song", "url", "youtube_title", "channel", "length",
+              "option_2", "option_3", "option_4", "status"]
 
 
 def search_songs(songs, candidates):
-    """Find the best YouTube match for each (section, song). Returns playlist rows."""
+    """Find the best YouTube match for each (section, song, hint). Returns playlist rows."""
     rows = []
     search_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
     with yt_dlp.YoutubeDL(search_opts) as searcher:
-        for index, (section, query) in enumerate(songs, start=1):
-            print(f"[{index}/{len(songs)}] {query}")
+        for index, (section, query, hint) in enumerate(songs, start=1):
+            print(f"[{index}/{len(songs)}] {query}" + (f"  ({hint})" if hint else ""))
             row = {"section": section, "song": query, "url": "", "youtube_title": "", "channel": "",
-                   "length": "", "other_options": "", "status": ""}
+                   "length": "", "option_2": "", "option_3": "", "option_4": "", "status": ""}
             rows.append(row)
             try:
-                ranked = find_videos(searcher, query, candidates)
+                ranked = find_videos(searcher, query, candidates, hint)
             except yt_dlp.utils.DownloadError as err:
                 print(f"    search failed: {err}")
                 row["status"] = "search failed"
@@ -224,16 +255,17 @@ def search_songs(songs, candidates):
                 row["status"] = "not found"
                 continue
 
-            best = ranked[0][1]
+            best_score, best = ranked[0]
             row.update(url=entry_url(best), youtube_title=best.get("title") or "",
                        channel=best.get("channel") or best.get("uploader") or "",
-                       length=format_duration(best.get("duration")), status="found")
+                       length=format_duration(best.get("duration")),
+                       status="found" if best_score >= WEAK_MATCH_SCORE else "check: weak match")
             # A few runners-up, so a wrong match is easy to swap out.
-            row["other_options"] = " | ".join(
-                f"{e.get('title')} [{format_duration(e.get('duration'))}] {entry_url(e)}"
-                for _, e in ranked[1:4]
-            )
+            for n, (_, e) in enumerate(ranked[1:4], start=2):
+                row[f"option_{n}"] = f"{e.get('title')} [{format_duration(e.get('duration'))}] {entry_url(e)}"
             print(f"    -> {row['youtube_title']} ({row['channel']}, {row['length']})\n       {row['url']}")
+            if row["status"] != "found":
+                print("       (weak match, please check this one)")
     return rows
 
 
@@ -348,7 +380,11 @@ def main():
         if args.dry_run:
             write_playlist_csv(args.csv, rows)
             missing = sum(1 for r in rows if not r["url"])
-            print(f"\nSaved {len(rows)} songs to {args.csv} ({missing} without a link).")
+            weak = [r["song"] for r in rows if r["status"] == "check: weak match"]
+            print(f"\nSaved {len(rows)} songs to {args.csv} ({missing} without a link, "
+                  f"{len(weak)} weak matches to check).")
+            for song in weak:
+                print(f"  check: {song}")
             print(f"Check the links, edit the url column, then run:\n"
                   f"    python download_songs.py --from-csv {args.csv}")
             return

@@ -1,36 +1,39 @@
-# One song per line: "Title - Artist" (anything YouTube search understands works).
-# Lines starting with "#" are comments. Lines like "1. Section Name" start a
-# new section; each section is saved in its own numbered subfolder.
+# One song per line: "Title - Artist". Lines starting with "#" are comments.
+# Lines like "1. Section Name" start a new section; each section is saved in its
+# own numbered subfolder.
+# Anything after "|" is only added to the YouTube search (e.g. the movie the song
+# is from). It isn't used in the file name or tags, and it helps find the right song.
 
 1. Gabby / Arrival / Theme Music
-Say Hello - MAX
-Gabby's Dollhouse World - Gabby's Dollhouse
-Pinching In - Gabby's Dollhouse
-Kaleidoscope - Gabby's Dollhouse & Tehillah Alphonso
-Skibidi Meow - Gabby's Dollhouse & Ryan Crego
-Cat Party - BOBBLYS
-Sweet Cream - Gabby's Dollhouse
-Let's Go for a Ride - Gabby's Dollhouse
-Every Day Is a Party - LU KALA
-Dollhouse World - aespa
-Pretty Glitter Kitty Litter - Gabby's Dollhouse / Alex Geringas / Ryan Crego
+# All from "Gabby's Dollhouse: The Movie" soundtrack (2025)
+Say Hello - MAX | Gabby's Dollhouse The Movie
+Gabby's Dollhouse World - Gabby's Dollhouse | Gabby's Dollhouse The Movie
+Pinching In - Gabby's Dollhouse | Gabby's Dollhouse The Movie
+Kaleidoscope - Gabby's Dollhouse & Tehillah Alphonso | Gabby's Dollhouse The Movie
+Skibidi Meow - Gabby's Dollhouse & Ryan Crego | Gabby's Dollhouse The Movie
+Cat Party - Gabby's Dollhouse & BOBBLYS | Gabby's Dollhouse The Movie
+Sweet Cream - Gabby's Dollhouse | Gabby's Dollhouse The Movie
+Let's Go for a Ride - Gabby's Dollhouse | Gabby's Dollhouse The Movie
+Every Day Is a Party - LU KALA | Gabby's Dollhouse The Movie
+Dollhouse World - aespa | Gabby's Dollhouse The Movie
+Pretty Glitter Kitty Litter - Gabby's Dollhouse & Ryan Crego | Gabby's Dollhouse The Movie
 
 2. Main Dance Floor - Kids + Parents
-Golden - HUNTR/X
-How It's Done - HUNTR/X
-Soda Pop - Saja Boys
-Takedown - HUNTR/X
-What It Sounds Like - HUNTR/X
+Golden - HUNTR/X | KPop Demon Hunters
+How It's Done - HUNTR/X | KPop Demon Hunters
+Soda Pop - Saja Boys | KPop Demon Hunters
+Takedown - HUNTR/X | KPop Demon Hunters
+What It Sounds Like - HUNTR/X | KPop Demon Hunters
 Dynamite - BTS
 Butter - BTS
 Permission to Dance - BTS
 Firework - Katy Perry
-Happy - Pharrell Williams
+Happy - Pharrell Williams | Despicable Me 2
 Girls Just Want to Have Fun - Cyndi Lauper
-Can't Stop the Feeling! - Justin Timberlake
+Can't Stop the Feeling! - Justin Timberlake | Trolls
 Shake It Off - Taylor Swift
 Roar - Katy Perry
-Better When I'm Dancin' - Meghan Trainor
+Better When I'm Dancin' - Meghan Trainor | The Peanuts Movie
 Good Time - Owl City & Carly Rae Jepsen
 Party in the U.S.A. - Miley Cyrus
 Call Me Maybe - Carly Rae Jepsen
@@ -39,33 +42,33 @@ Walking on Sunshine - Katrina & The Waves
 Celebration - Kool & The Gang
 Dancing Queen - ABBA
 September - Earth, Wind & Fire
-Try Everything - Shakira
+Try Everything - Shakira | Zootopia
 
 3. Disney / Movie Sing-Alongs
-Let It Go - Idina Menzel - Frozen
-Into the Unknown - Idina Menzel & AURORA - Frozen II
-Show Yourself - Idina Menzel & Evan Rachel Wood - Frozen II
-For the First Time in Forever - Kristen Bell & Idina Menzel - Frozen
-We Don't Talk About Bruno - Encanto Cast
-Surface Pressure - Jessica Darrow - Encanto
-The Family Madrigal - Stephanie Beatriz / Encanto Cast
-You're Welcome - Dwayne Johnson - Moana
-How Far I'll Go - Auli'i Cravalho - Moana
-This Wish - Ariana DeBose - Wish
-When Will My Life Begin? - Mandy Moore - Tangled
-I've Got a Dream - Tangled Cast
-Nobody Like U - 4*TOWN - Turning Red
-Friend Like Me - Will Smith - Aladdin
-Under the Sea - Samuel E. Wright - The Little Mermaid
+Let It Go - Idina Menzel | Frozen
+Into the Unknown - Idina Menzel & AURORA | Frozen 2
+Show Yourself - Idina Menzel & Evan Rachel Wood | Frozen 2
+For the First Time in Forever - Kristen Bell & Idina Menzel | Frozen
+We Don't Talk About Bruno - Encanto Cast | Encanto
+Surface Pressure - Jessica Darrow | Encanto
+The Family Madrigal - Stephanie Beatriz | Encanto
+You're Welcome - Dwayne Johnson | Moana
+How Far I'll Go - Auli'i Cravalho | Moana
+This Wish - Ariana DeBose | Wish
+When Will My Life Begin - Mandy Moore | Tangled
+I've Got a Dream - Tangled Cast | Tangled
+Nobody Like U - 4*TOWN | Turning Red
+Friend Like Me - Will Smith | Aladdin 2019
+Under the Sea - Samuel E. Wright | The Little Mermaid
 
 4. Games / Group Dance Cues
 Freeze Dance - The Kiboomers
 Cha Cha Slide - DJ Casper
-The Chicken Dance - The Emeralds
+The Chicken Dance - The Emeralds | Bird Dance
 Conga - Gloria Estefan & Miami Sound Machine
 Y.M.C.A. - Village People
-I Like to Move It - will.i.am
+I Like to Move It - will.i.am | Madagascar
 Jump in the Line - Harry Belafonte
 Twist and Shout - The Beatles
-Push It (clean) - Salt-N-Pepa
+Push It - Salt-N-Pepa | radio edit
 # Ice-skate / twirl game cue: reuse "Let It Go" or "Into the Unknown" from section 3.
